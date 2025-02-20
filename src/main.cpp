@@ -120,9 +120,9 @@ void renderTableToDisplay(const String& tableHTML, int yOffset) {
       display.setCursor(0, y - LINE_PADDING_BOTTOM);
       display.print(rowText);
       y += LINE_HEIGHT;
+      rowIndex = rowIndex + 1;
     }
 
-    rowIndex = rowIndex + 1;
     currentIndex = trEnd + 5;  // Move index past the closing </tr>
   }
 }
