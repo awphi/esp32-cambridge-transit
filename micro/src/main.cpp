@@ -12,6 +12,7 @@
 #define LINE_PADDING_BOTTOM 7
 #define LINE_HEIGHT (18 + LINE_PADDING_BOTTOM)
 
+// TODO use aggregate API once it's running
 const String url =
     "https://www.cambridgeshirebus.info/Popup_Content/WebDisplay/"
     "WebDisplay.aspx?stopRef=";
