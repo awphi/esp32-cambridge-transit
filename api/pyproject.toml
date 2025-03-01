@@ -4,11 +4,15 @@ description = "Aggregate API for Cambridge transit ESP32 project"
 authors = [{ name = "awphi", email = "admin@adamw.ph" }]
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["fastapi[standard] (>=0.115.10,<0.116.0)"]
 
 [tool.poetry]
 packages = [{ include = "api", from = "src" }]
 package-mode = false
+
+[tool.poe.tasks]
+start = "poetry run fastapi run main.py"
+dev = "poetry run fastapi dev main.py"
 
 
 [build-system]
