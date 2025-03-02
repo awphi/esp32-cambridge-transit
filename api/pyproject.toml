@@ -3,8 +3,15 @@ name = "esp32-cambridge-transit-api"
 description = "Aggregate API for Cambridge transit ESP32 project"
 authors = [{ name = "awphi", email = "admin@adamw.ph" }]
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = ["fastapi[standard] (>=0.115.10,<0.116.0)"]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard] (>=0.115.10,<0.116.0)",
+    "requests (>=2.32.3,<3.0.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "pydantic (>=2.10.6,<3.0.0)",
+    "bs4 (>=0.0.2,<0.0.3)",
+]
+
 
 [tool.poetry]
 packages = [{ include = "api", from = "src" }]

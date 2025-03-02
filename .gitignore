@@ -6,3 +6,4 @@
 secrets.h
 .venv/
 __pycache__/
+.env
