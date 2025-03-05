@@ -1,7 +1,9 @@
 FROM ubuntu:24.04
 COPY . .
 
-# TODO set BUS_STOP_REF env var w/ GH actions
+ARG BUS_STOP_REF
+
+ENV BUS_STOP_REF=$BUS_STOP_REF
 ENV PATH="${PATH}:/root/.local/bin"
 
 RUN apt update
