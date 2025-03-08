@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def get_env(key: str, defaultValue: Optional[str]) -> str:
+def get_env(key: str, defaultValue: Optional[str] = None) -> str:
     v = os.getenv(key) or defaultValue
 
     if v is None:
