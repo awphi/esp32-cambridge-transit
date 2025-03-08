@@ -7,10 +7,12 @@ RUN apt install pipx -y
 RUN pipx ensurepath
 RUN pipx install poetry
 RUN pipx install poethepoet
+
+COPY . .
+
 RUN poetry install
 
 EXPOSE 8000
 
-COPY . .
 
 CMD [ "poe", "start" ]
