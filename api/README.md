@@ -13,7 +13,7 @@ poe dev # or `poe start` for prod
 
 ### Environment vars
 
-You'll also need to set a few environment variables. You can do this by creating a `.env` file adjacent to this README that looks like this:
+You'll also need to set a few environment variables. For local development, you can do this by creating a `.env` file adjacent to this README that looks like this:
 
 ```bash
 BUS_STOP_REF=...

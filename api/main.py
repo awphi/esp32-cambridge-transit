@@ -2,14 +2,11 @@ import threading
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from bus_info import BusInfo, fetch_bus_info
 from utils import now
-
-load_dotenv()
 
 
 class TransitInfo(BaseModel):

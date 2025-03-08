@@ -1,9 +1,10 @@
-import os
 from typing import List
 
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
+
+from env import get_env
 
 
 class BusInfo(BaseModel):
@@ -15,7 +16,7 @@ class BusInfo(BaseModel):
 def fetch_bus_info() -> List[BusInfo]:
     url: str = (
         "https://www.cambridgeshirebus.info/Popup_Content/WebDisplay/WebDisplay.aspx?stopRef="
-        + os.getenv("BUS_STOP_REF")
+        + get_env("BUS_STOP_REF")
     )
     r = requests.get(url)
     result: List[BusInfo] = []
