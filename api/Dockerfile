@@ -1,5 +1,4 @@
 FROM ubuntu:24.04
-COPY . .
 
 ENV PATH="${PATH}:/root/.local/bin"
 
@@ -11,5 +10,7 @@ RUN pipx install poethepoet
 RUN poetry install
 
 EXPOSE 8000
+
+COPY . .
 
 CMD [ "poe", "start" ]
