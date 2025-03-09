@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, List
+from typing import Any
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -11,8 +11,8 @@ from utils import now
 
 class TransitInfo(BaseModel):
     time: int = Field(default_factory=lambda: now())
-    bus_info: List[BusInfo] = Field(default=[])
-    train_info: List[Any] = Field(default=[])
+    bus_info: list[BusInfo] = Field(default=[])
+    train_info: list[Any] = Field(default=[])
 
 
 transit_info = TransitInfo()
