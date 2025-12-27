@@ -33,19 +33,16 @@ String removeHTMLTags(const String& input) {
       inTag = false;
       continue;
     }
-    if (!inTag)
-      output += c;
+    if (!inTag) output += c;
   }
   return output;
 }
 
 String extractTable(const String& html) {
   int tableStart = html.indexOf("<table class=\"rtiTable\"");
-  if (tableStart == -1)
-    return "";
+  if (tableStart == -1) return "";
   int tableEnd = html.indexOf("</table>", tableStart);
-  if (tableEnd == -1)
-    return "";
+  if (tableEnd == -1) return "";
   // Include the closing tag in the substring:
   return html.substring(tableStart, tableEnd + 8);
 }
@@ -94,15 +91,12 @@ void renderTableToDisplay(const String& tableHTML, int yOffset) {
     // only render first 3 non-empty columns
     while (colIndex < 3) {
       int tdStart = trContent.indexOf("<td", tdIndex);
-      if (tdStart == -1)
-        break;
+      if (tdStart == -1) break;
       // Find the end of the <td ...> tag
       int tdTagEnd = trContent.indexOf(">", tdStart);
-      if (tdTagEnd == -1)
-        break;
+      if (tdTagEnd == -1) break;
       int tdEnd = trContent.indexOf("</td>", tdTagEnd);
-      if (tdEnd == -1)
-        break;
+      if (tdEnd == -1) break;
 
       String cellContent = trContent.substring(tdTagEnd + 1, tdEnd);
       cellContent = removeHTMLTags(cellContent);
@@ -185,7 +179,7 @@ void updateDisplay() {
     display.setCursor(0, 0);
     display.setTextSize(1);  // Adjust text size as needed
 
-    renderHeader("Buses - Milton P&R", LINE_HEIGHT);
+    renderHeader("Buses - " + String(BUS_STOP_NAME), LINE_HEIGHT);
     renderTableToDisplay(busTableHTML, LINE_HEIGHT * 2);
   } while (display.nextPage());
 }

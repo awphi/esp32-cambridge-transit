@@ -10,4 +10,5 @@ We need a few secret variables to run this project. These are defined in a hidde
 #define WIFI_SSID "..."
 #define WIFI_PASSWORD "..."
 #define BUS_STOP_REF "..."
+#define BUS_STOP_NAME "..."
 ```

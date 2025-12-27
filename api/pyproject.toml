@@ -1,28 +1,25 @@
 [project]
 name = "esp32-cambridge-transit-api"
+version = "0.1.0"
 description = "Aggregate API for Cambridge transit ESP32 project"
 authors = [{ name = "awphi", email = "admin@adamw.ph" }]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.13.*"
 dependencies = [
-    "fastapi[standard] (>=0.115.10,<0.116.0)",
-    "requests (>=2.32.3,<3.0.0)",
-    "python-dotenv (>=1.0.1,<2.0.0)",
-    "pydantic (>=2.10.6,<3.0.0)",
-    "bs4 (>=0.0.2,<0.0.3)",
-    "asyncio (>=3.4.3,<4.0.0)",
+  "asyncio>=4.0.0",
+  "bs4>=0.0.2",
+  "fastapi[standard]>=0.127.1",
+  "python-dotenv>=1.2.1",
+  "requests>=2.32.5",
 ]
 
 
-[tool.poetry]
-packages = [{ include = "api", from = "src" }]
-package-mode = false
+[dependency-groups]
+dev = ["ruff>=0.14.10"]
 
-[tool.poe.tasks]
-start = "poetry run fastapi run main.py"
-dev = "poetry run fastapi dev main.py"
+[tool.ruff]
+line-length = 79
+target-version = "py313"
 
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.lint]
+select = ["F", "B", "I", "SIM", "C4"]

@@ -1,18 +1,8 @@
-FROM ubuntu:24.04
-
-ENV PATH="${PATH}:/root/.local/bin"
-
-RUN apt update
-RUN apt install pipx -y
-RUN pipx ensurepath
-RUN pipx install poetry
-RUN pipx install poethepoet
+FROM python:3.13.11-alpine
 
 COPY . .
-
-RUN poetry install
+RUN pip install .
 
 EXPOSE 8000
 
-
-CMD [ "poe", "start" ]
+CMD [ "fastapi", "run" ]

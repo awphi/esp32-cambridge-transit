@@ -1,8 +1,4 @@
 {
-  "recommendations": [
-    "platformio.platformio-ide",
-    "ms-python.black-formatter",
-    "ms-python.isort"
-  ],
+  "recommendations": ["platformio.platformio-ide"],
   "unwantedRecommendations": ["ms-vscode.cpptools-extension-pack"]
 }
