@@ -19,6 +19,7 @@ const int maxRowsPerSection = 5;
 const size_t jsonDocSize = 8192;
 StaticJsonDocument<jsonDocSize> transitDoc;
 const uint64_t refreshIntervalUs = 60ULL * 1000000ULL;
+const unsigned long wifiConnectTimeoutMs = 10000;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -143,12 +144,18 @@ void connectWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  while (WiFi.status() != WL_CONNECTED) {
+  unsigned long startMs = millis();
+  while (WiFi.status() != WL_CONNECTED &&
+         (millis() - startMs) < wifiConnectTimeoutMs) {
     delay(500);
     Serial.print(".");
   }
 
-  Serial.println("\nWiFi connected.");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi connected.");
+  } else {
+    Serial.println("\nWiFi connect timeout.");
+  }
 }
 
 void sleepWithWifiOff() {
