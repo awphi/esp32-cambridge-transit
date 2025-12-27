@@ -1,10 +1,10 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <esp_sleep.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <esp_sleep.h>
 #include <secrets.h>
 
 #include "GxEPD2_display_selection_new_style.h"
@@ -19,7 +19,7 @@ const int maxRowsPerSection = 5;
 const size_t jsonDocSize = 8192;
 StaticJsonDocument<jsonDocSize> transitDoc;
 const uint64_t refreshIntervalUs = 60ULL * 1000000ULL;
-const unsigned long wifiConnectTimeoutMs = 10000;
+const unsigned long wifiConnectTimeoutMs = 15000;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -40,8 +40,7 @@ String ensureStringLength(const String& str, int len) {
   return str;
 }
 
-String formatTransitRow(const String& service,
-                        const String& dest,
+String formatTransitRow(const String& service, const String& dest,
                         const String& eta) {
   String rowText = ensureStringLength(service, transitColumnLengths[0]);
   rowText += rightPad("", ' ', columnSpacingLength);
@@ -82,7 +81,8 @@ void renderTransitRows(JsonArray departures, int yOffset) {
   }
 }
 
-void renderTransitSection(JsonObject info, int yOffset, const char* fallbackTitle) {
+void renderTransitSection(JsonObject info, int yOffset,
+                          const char* fallbackTitle) {
   if (info.isNull()) {
     renderHeader(fallbackTitle, yOffset);
     return;
@@ -172,6 +172,11 @@ void updateDisplay() {
   JsonObject busInfo = transitDoc["bus_info"];
   JsonObject trainInfo = transitDoc["train_info"];
 
+  if (!hasData) {
+    Serial.println("No transit data available.");
+    return;
+  }
+
   display.setFullWindow();
   display.firstPage();
   do {
@@ -180,15 +185,10 @@ void updateDisplay() {
     display.setCursor(0, 0);
     display.setTextSize(1);  // Adjust text size as needed
 
-    if (hasData) {
-      renderTransitSection(busInfo, LINE_HEIGHT, "Buses");
-      renderTransitSection(trainInfo, LINE_HEIGHT * (maxRowsPerSection + 2),
-                           "Trains");
-    } else {
-      renderHeader("Transit", LINE_HEIGHT);
-      display.setCursor(0, (LINE_HEIGHT * 2) - LINE_PADDING_BOTTOM);
-      display.print("No data");
-    }
+    renderTransitSection(busInfo, LINE_HEIGHT, "Buses");
+    renderTransitSection(trainInfo, LINE_HEIGHT * (maxRowsPerSection + 2),
+                         "Trains");
+
   } while (display.nextPage());
 }
 
