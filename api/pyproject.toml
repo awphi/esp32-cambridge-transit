@@ -23,3 +23,6 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["F", "B", "I", "SIM", "C4"]
+
+[tool.uv]
+package = false

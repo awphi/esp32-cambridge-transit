@@ -1,8 +1,8 @@
-FROM python:3.13.11-alpine
+FROM ghcr.io/astral-sh/uv:python3.13-alpine
 
 COPY . .
-RUN pip install .
+RUN uv sync --frozen
 
 EXPOSE 8000
 
-CMD [ "fastapi", "run" ]
+CMD [ "uv", "run", "fastapi", "run" ]
