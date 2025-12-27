@@ -1,9 +1,10 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
+#include <esp_sleep.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <secrets.h>
 
 #include "GxEPD2_display_selection_new_style.h"
@@ -12,40 +13,12 @@
 #define LINE_PADDING_BOTTOM 7
 #define LINE_HEIGHT (18 + LINE_PADDING_BOTTOM)
 
-// TODO use aggregate API once it's running
-const String url =
-    "https://www.cambridgeshirebus.info/Popup_Content/WebDisplay/"
-    "WebDisplay.aspx?stopRef=";
-
 const int columnSpacingLength = 3;
-const int busColumnLengths[] = {3, 20, 7};
-
-String removeHTMLTags(const String& input) {
-  String output = "";
-  bool inTag = false;
-  for (size_t i = 0; i < input.length(); i++) {
-    char c = input.charAt(i);
-    if (c == '<') {
-      inTag = true;
-      continue;
-    }
-    if (c == '>') {
-      inTag = false;
-      continue;
-    }
-    if (!inTag) output += c;
-  }
-  return output;
-}
-
-String extractTable(const String& html) {
-  int tableStart = html.indexOf("<table class=\"rtiTable\"");
-  if (tableStart == -1) return "";
-  int tableEnd = html.indexOf("</table>", tableStart);
-  if (tableEnd == -1) return "";
-  // Include the closing tag in the substring:
-  return html.substring(tableStart, tableEnd + 8);
-}
+const int transitColumnLengths[] = {3, 20, 7};
+const int maxRowsPerSection = 5;
+const size_t jsonDocSize = 8192;
+StaticJsonDocument<jsonDocSize> transitDoc;
+const uint64_t refreshIntervalUs = 60ULL * 1000000ULL;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -60,66 +33,21 @@ String ensureStringLength(const String& str, int len) {
   if (n < len) {
     return rightPad(str, ' ', len - n);
   } else if (n > len) {
-    return str.substring(0, n);
+    return str.substring(0, len);
   }
 
   return str;
 }
 
-void renderTableToDisplay(const String& tableHTML, int yOffset) {
-  int currentIndex = 0;
-  int rowIndex = 0;
-  int y = yOffset;
-
-  // Loop through each table row (<tr>...</tr>)
-  while (rowIndex < 5) {
-    int trStart = tableHTML.indexOf("<tr", currentIndex);
-    if (trStart == -1) {
-      break;
-    }
-    int trEnd = tableHTML.indexOf("</tr>", trStart);
-    if (trEnd == -1) {
-      break;
-    }
-    String trContent = tableHTML.substring(trStart, trEnd);
-
-    // Parse out each cell (<td>...</td>) within the row.
-    String rowText = "";
-    int tdIndex = 0;
-    int colIndex = 0;
-
-    // only render first 3 non-empty columns
-    while (colIndex < 3) {
-      int tdStart = trContent.indexOf("<td", tdIndex);
-      if (tdStart == -1) break;
-      // Find the end of the <td ...> tag
-      int tdTagEnd = trContent.indexOf(">", tdStart);
-      if (tdTagEnd == -1) break;
-      int tdEnd = trContent.indexOf("</td>", tdTagEnd);
-      if (tdEnd == -1) break;
-
-      String cellContent = trContent.substring(tdTagEnd + 1, tdEnd);
-      cellContent = removeHTMLTags(cellContent);
-
-      if (cellContent.length() > 0 && cellContent != "&nbsp;") {
-        cellContent =
-            ensureStringLength(cellContent, busColumnLengths[colIndex]);
-        rowText += rightPad(cellContent, ' ', columnSpacingLength);
-        colIndex = colIndex + 1;
-      }
-
-      tdIndex = tdEnd + 5;  // Move index past the closing </td>
-    }
-
-    if (rowText.length() > 0) {
-      display.setCursor(0, y - LINE_PADDING_BOTTOM);
-      display.print(rowText);
-      y += LINE_HEIGHT;
-      rowIndex = rowIndex + 1;
-    }
-
-    currentIndex = trEnd + 5;  // Move index past the closing </tr>
-  }
+String formatTransitRow(const String& service,
+                        const String& dest,
+                        const String& eta) {
+  String rowText = ensureStringLength(service, transitColumnLengths[0]);
+  rowText += rightPad("", ' ', columnSpacingLength);
+  rowText += ensureStringLength(dest, transitColumnLengths[1]);
+  rowText += rightPad("", ' ', columnSpacingLength);
+  rowText += ensureStringLength(eta, transitColumnLengths[2]);
+  return rowText;
 }
 
 void renderHeader(const String& str, int yOffset) {
@@ -131,45 +59,111 @@ void renderHeader(const String& str, int yOffset) {
   display.drawLine(0, topLineY, display.width() - 1, topLineY, GxEPD_BLACK);
 }
 
-String fetchBusData() {
-  Serial.println("Starting HTTPS GET request...");
+void renderTransitRows(JsonArray departures, int yOffset) {
+  int rowIndex = 0;
+  int y = yOffset;
 
-  // Create a secure Wi‑Fi client (disable certificate validation for
-  // simplicity)
-  WiFiClientSecure client;
-  client.setInsecure();
+  for (JsonVariant row : departures) {
+    if (rowIndex >= maxRowsPerSection) {
+      break;
+    }
+    String service = row["service"] | "";
+    String dest = row["dest"] | "";
+    String eta = row["eta"] | "";
+    String rowText = formatTransitRow(service, dest, eta);
 
-  HTTPClient https;
-  if (https.begin(client, url + BUS_STOP_REF)) {
-    int httpCode = https.GET();
-    if (httpCode > 0) {
-      if (httpCode == HTTP_CODE_OK) {
-        String payload = https.getString();
-        Serial.println("Data fetched successfully.");
-        String tableHTML = extractTable(payload);
-        if (tableHTML != "") {
-          return tableHTML;
-        } else {
-          Serial.println("No <table> element found in the HTML.");
-        }
+    if (rowText.length() > 0) {
+      display.setCursor(0, y - LINE_PADDING_BOTTOM);
+      display.print(rowText);
+      y += LINE_HEIGHT;
+      rowIndex = rowIndex + 1;
+    }
+  }
+}
+
+void renderTransitSection(JsonObject info, int yOffset, const char* fallbackTitle) {
+  if (info.isNull()) {
+    renderHeader(fallbackTitle, yOffset);
+    return;
+  }
+  String title = info["title"] | fallbackTitle;
+  renderHeader(title, yOffset);
+  JsonArray departures = info["departures"].as<JsonArray>();
+  if (!departures.isNull()) {
+    renderTransitRows(departures, yOffset + LINE_HEIGHT);
+  }
+}
+
+String buildApiUrl() {
+  String baseUrl = String(API_BASE_URL);
+  if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+    baseUrl = "http://" + baseUrl;
+  }
+  if (!baseUrl.endsWith("/")) {
+    baseUrl += "/";
+  }
+  return baseUrl;
+}
+
+bool fetchTransitInfo(JsonDocument& doc) {
+  String apiUrl = buildApiUrl();
+  Serial.printf("Starting GET request: %s\n", apiUrl.c_str());
+
+  WiFiClient client;
+  HTTPClient http;
+  if (http.begin(client, apiUrl)) {
+    int httpCode = http.GET();
+    if (httpCode == HTTP_CODE_OK) {
+      String payload = http.getString();
+      DeserializationError error = deserializeJson(doc, payload);
+      if (error) {
+        Serial.printf("JSON parse error: %s\n", error.c_str());
       } else {
-        Serial.printf("HTTP GET error: %s\n",
-                      https.errorToString(httpCode).c_str());
+        http.end();
+        return true;
       }
     } else {
-      Serial.printf("Unable to connect, error: %s\n",
-                    https.errorToString(httpCode).c_str());
+      Serial.printf("HTTP GET error: %s\n",
+                    http.errorToString(httpCode).c_str());
     }
-    https.end();
+    http.end();
   } else {
-    Serial.println("HTTPS connection failed to initialize.");
+    Serial.println("HTTP connection failed to initialize.");
   }
 
-  return "";
+  return false;
+}
+
+void connectWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  Serial.printf("connecting to WiFi network: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi connected.");
+}
+
+void sleepWithWifiOff() {
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+
+  esp_sleep_enable_timer_wakeup(refreshIntervalUs);
+  esp_light_sleep_start();
 }
 
 void updateDisplay() {
-  String busTableHTML = fetchBusData();
+  transitDoc.clear();
+  bool hasData = fetchTransitInfo(transitDoc);
+  JsonObject busInfo = transitDoc["bus_info"];
+  JsonObject trainInfo = transitDoc["train_info"];
 
   display.setFullWindow();
   display.firstPage();
@@ -179,8 +173,15 @@ void updateDisplay() {
     display.setCursor(0, 0);
     display.setTextSize(1);  // Adjust text size as needed
 
-    renderHeader("Buses - " + String(BUS_STOP_NAME), LINE_HEIGHT);
-    renderTableToDisplay(busTableHTML, LINE_HEIGHT * 2);
+    if (hasData) {
+      renderTransitSection(busInfo, LINE_HEIGHT, "Buses");
+      renderTransitSection(trainInfo, LINE_HEIGHT * (maxRowsPerSection + 2),
+                           "Trains");
+    } else {
+      renderHeader("Transit", LINE_HEIGHT);
+      display.setCursor(0, (LINE_HEIGHT * 2) - LINE_PADDING_BOTTOM);
+      display.print("No data");
+    }
   } while (display.nextPage());
 }
 
@@ -193,20 +194,13 @@ void setup() {
   display.setRotation(0);
   display.setFont(&FreeMonoBold9pt7b);
 
-  Serial.printf("connecting to WiFi network: %s\n", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("\nWiFi connected.");
+  connectWifi();
 
   updateDisplay();
 }
 
 void loop() {
-  delay(60000);
+  sleepWithWifiOff();
+  connectWifi();
   updateDisplay();
 }
