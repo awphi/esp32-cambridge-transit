@@ -16,5 +16,7 @@ uv run fastapi dev # or `uv run fastapi start` for prod
 You'll also need to set a few environment variables. For local development, you can do this by creating a `.env` file adjacent to this README that looks like this:
 
 ```bash
-BUS_STOP_REF=...
+BUS_STOP_REF=... # e.g. XYZ123
+TRAIN_QUERY=... # e.g. KGX?filterCrs=SSD
+TRAIN_API_KEY=...
 ```
