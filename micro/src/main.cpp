@@ -4,7 +4,6 @@
 #include <GxEPD2_BW.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <esp_sleep.h>
 #include <secrets.h>
 
 #include "GxEPD2_display_selection_new_style.h"
@@ -18,8 +17,9 @@ const int transitColumnLengths[] = {3, 20, 7};
 const int maxRowsPerSection = 5;
 const size_t jsonDocSize = 8192;
 StaticJsonDocument<jsonDocSize> transitDoc;
-const uint64_t refreshIntervalUs = 60ULL * 1000000ULL;
 const unsigned long wifiConnectTimeoutMs = 15000;
+const int maxFetchAttempts = 3;
+const unsigned long fetchBackoffMs = 2000;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -106,38 +106,10 @@ String buildApiUrl() {
   return baseUrl;
 }
 
-bool fetchTransitInfo(JsonDocument& doc) {
-  String apiUrl = buildApiUrl();
-  Serial.printf("Starting GET request: %s\n", apiUrl.c_str());
-
-  WiFiClient client;
-  HTTPClient http;
-  if (http.begin(client, apiUrl)) {
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK) {
-      String payload = http.getString();
-      DeserializationError error = deserializeJson(doc, payload);
-      if (error) {
-        Serial.printf("JSON parse error: %s\n", error.c_str());
-      } else {
-        http.end();
-        return true;
-      }
-    } else {
-      Serial.printf("HTTP GET error: %s\n",
-                    http.errorToString(httpCode).c_str());
-    }
-    http.end();
-  } else {
-    Serial.println("HTTP connection failed to initialize.");
-  }
-
-  return false;
-}
-
-void connectWifi() {
+bool connectWifi() {
   if (WiFi.status() == WL_CONNECTED) {
-    return;
+    WiFi.setSleep(true);
+    return true;
   }
 
   Serial.printf("connecting to WiFi network: %s\n", WIFI_SSID);
@@ -153,17 +125,50 @@ void connectWifi() {
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\nWiFi connected.");
+    WiFi.setSleep(true);
+    return true;
   } else {
     Serial.println("\nWiFi connect timeout.");
+    return false;
   }
 }
 
-void sleepWithWifiOff() {
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
+bool fetchTransitInfo(JsonDocument& doc) {
+  String apiUrl = buildApiUrl();
 
-  esp_sleep_enable_timer_wakeup(refreshIntervalUs);
-  esp_light_sleep_start();
+  for (int attempt = 0; attempt < maxFetchAttempts; attempt++) {
+    if (!connectWifi()) {
+      delay(fetchBackoffMs * (attempt + 1));
+      continue;
+    }
+
+    Serial.printf("Starting GET request: %s\n", apiUrl.c_str());
+    WiFiClient client;
+    HTTPClient http;
+    if (http.begin(client, apiUrl)) {
+      int httpCode = http.GET();
+      if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        DeserializationError error = deserializeJson(doc, payload);
+        if (error) {
+          Serial.printf("JSON parse error: %s\n", error.c_str());
+        } else {
+          http.end();
+          return true;
+        }
+      } else {
+        Serial.printf("HTTP GET error: %s\n",
+                      http.errorToString(httpCode).c_str());
+      }
+      http.end();
+    } else {
+      Serial.println("HTTP connection failed to initialize.");
+    }
+
+    delay(fetchBackoffMs * (attempt + 1));
+  }
+
+  return false;
 }
 
 void updateDisplay() {
@@ -207,7 +212,6 @@ void setup() {
 }
 
 void loop() {
-  sleepWithWifiOff();
-  connectWifi();
+  delay(60000);
   updateDisplay();
 }
