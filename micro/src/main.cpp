@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <esp_sleep.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <time.h>
 #include <secrets.h>
 
 #include "GxEPD2_display_selection_new_style.h"
@@ -20,6 +22,7 @@ StaticJsonDocument<jsonDocSize> transitDoc;
 const unsigned long wifiConnectTimeoutMs = 15000;
 const int maxFetchAttempts = 3;
 const unsigned long fetchBackoffMs = 2000;
+const gpio_num_t wakePin = GPIO_NUM_33;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -50,6 +53,21 @@ String formatTransitRow(const String& service, const String& dest,
   return rowText;
 }
 
+String formatTime24h(long epochSeconds) {
+  if (epochSeconds <= 0) {
+    return "";
+  }
+  time_t raw = static_cast<time_t>(epochSeconds);
+  struct tm* timeinfo = localtime(&raw);
+  if (!timeinfo) {
+    return "";
+  }
+  char buffer[6];
+  snprintf(buffer, sizeof(buffer), "%02d:%02d", timeinfo->tm_hour,
+           timeinfo->tm_min);
+  return String(buffer);
+}
+
 void renderHeader(const String& str, int yOffset) {
   display.setCursor(0, yOffset - LINE_PADDING_BOTTOM);
   display.print(str);
@@ -57,6 +75,21 @@ void renderHeader(const String& str, int yOffset) {
   int topLineY = yOffset - LINE_HEIGHT;
   display.drawLine(0, yOffset, display.width() - 1, yOffset, GxEPD_BLACK);
   display.drawLine(0, topLineY, display.width() - 1, topLineY, GxEPD_BLACK);
+}
+
+void renderUpdateTime(const String& timeStr, int yOffset) {
+  if (timeStr.length() == 0) {
+    return;
+  }
+  int16_t x1;
+  int16_t y1;
+  uint16_t w;
+  uint16_t h;
+  display.getTextBounds(timeStr, 0, 0, &x1, &y1, &w, &h);
+  int16_t x = display.width() - w - 1;
+  int16_t y = yOffset - LINE_PADDING_BOTTOM;
+  display.setCursor(x - x1, y);
+  display.print(timeStr);
 }
 
 void renderTransitRows(JsonArray departures, int yOffset) {
@@ -172,10 +205,17 @@ bool fetchTransitInfo(JsonDocument& doc) {
 }
 
 void updateDisplay() {
+  Serial.println("initializing display...");
+  display.init(115200);  // SPI baudrate
+  display.setRotation(0);
+  display.setFont(&FreeMonoBold9pt7b);
+
   transitDoc.clear();
   bool hasData = fetchTransitInfo(transitDoc);
   JsonObject busInfo = transitDoc["bus_info"];
   JsonObject trainInfo = transitDoc["train_info"];
+  long epochSeconds = transitDoc["time"] | 0;
+  String timeStr = formatTime24h(epochSeconds);
 
   if (!hasData) {
     Serial.println("No transit data available.");
@@ -191,6 +231,7 @@ void updateDisplay() {
     display.setTextSize(1);  // Adjust text size as needed
 
     renderTransitSection(busInfo, LINE_HEIGHT, "Buses");
+    renderUpdateTime(timeStr, LINE_HEIGHT);
     renderTransitSection(trainInfo, LINE_HEIGHT * (maxRowsPerSection + 2),
                          "Trains");
 
@@ -201,17 +242,17 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  Serial.println("initializing display...");
-  display.init(115200);  // SPI baudrate
-  display.setRotation(0);
-  display.setFont(&FreeMonoBold9pt7b);
-
+  pinMode(wakePin, INPUT_PULLUP);
   connectWifi();
 
   updateDisplay();
+
+  while (digitalRead(wakePin) == LOW) {
+    delay(10);
+  }
+  esp_sleep_enable_ext0_wakeup(wakePin, 0);
+  esp_deep_sleep_start();
 }
 
 void loop() {
-  delay(60000);
-  updateDisplay();
 }
