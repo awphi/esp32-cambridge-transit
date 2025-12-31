@@ -31,7 +31,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: | 
-            linux/arm64/v8
+            linux/amd64
           context: ./api
           push: true
           tags: ghcr.io/${{ github.repository }}-api:latest
