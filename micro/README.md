@@ -1,6 +1,21 @@
 # esp32-cambridge-transit-micro
 
-ESP32-compatible Arduino code for the microcontroller connected to an e-ink display
+ESP32-compatible Arduino code for the microcontroller connected to an e-ink display. This application is specifically implemented for a Firebeetle ESP32-E with the following pinout:
+
+```
+| ESP32         | e-Paper Display |
+| ------------- | --------------- |
+| GPIO4         | Busy            |
+| GPIO16        | RST             |
+| GPIO17        | DC              |
+| GPIO12        | CS              |
+| GPIO18 (SCK)  | CLK             |
+| GPIO23 (MOSI) | DIN             |
+| GND           | GND             |
+| 3.3V          | VCC             |
+```
+
+`GPIO25` controls the wake mechnanism and will wake the device from deep sleep when pulled to `GND`.
 
 ### Secrets
 

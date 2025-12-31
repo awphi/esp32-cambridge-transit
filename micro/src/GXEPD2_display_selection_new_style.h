@@ -124,8 +124,9 @@
 //#define GxEPD2_DRIVER_CLASS GxEPD2_it103_1872x1404 // ES103TC1 1872x1404
 
 // SS is usually used for CS. define here for easy change
+// EDIT: changed to 12 for Firebeetle ESP32-E as 5 is used for builtin RGB LED
 #ifndef EPD_CS
-#define EPD_CS SS
+#define EPD_CS GPIO_NUM_12
 #endif
 
 #if defined(GxEPD2_DISPLAY_CLASS) && defined(GxEPD2_DRIVER_CLASS)

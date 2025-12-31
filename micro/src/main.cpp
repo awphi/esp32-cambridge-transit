@@ -1,28 +1,28 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <esp_sleep.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <time.h>
 #include <secrets.h>
+#include <time.h>
 
 #include "GxEPD2_display_selection_new_style.h"
 
 // total line height of 25 = 12 lines of text w/ display height of 300
 #define LINE_PADDING_BOTTOM 7
 #define LINE_HEIGHT (18 + LINE_PADDING_BOTTOM)
+#define WAKE_PIN GPIO_NUM_25
 
 const int columnSpacingLength = 3;
 const int transitColumnLengths[] = {3, 20, 7};
 const int maxRowsPerSection = 5;
 const size_t jsonDocSize = 8192;
-StaticJsonDocument<jsonDocSize> transitDoc;
 const unsigned long wifiConnectTimeoutMs = 15000;
 const int maxFetchAttempts = 3;
 const unsigned long fetchBackoffMs = 2000;
-const gpio_num_t wakePin = GPIO_NUM_33;
+
+StaticJsonDocument<jsonDocSize> transitDoc;
 
 String rightPad(const String& str, char c, int len) {
   String output = "";
@@ -242,17 +242,19 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  pinMode(wakePin, INPUT_PULLUP);
+  // fetch transit info and update display
   connectWifi();
-
   updateDisplay();
 
-  while (digitalRead(wakePin) == LOW) {
+  Serial.println("going to deep sleep...");
+
+  // start deep sleep until wake pin is pulled low
+  pinMode(WAKE_PIN, INPUT_PULLUP);
+  while (digitalRead(WAKE_PIN) == LOW) {
     delay(10);
   }
-  esp_sleep_enable_ext0_wakeup(wakePin, 0);
+  esp_sleep_enable_ext0_wakeup(WAKE_PIN, 0);
   esp_deep_sleep_start();
 }
 
-void loop() {
-}
+void loop() {}
