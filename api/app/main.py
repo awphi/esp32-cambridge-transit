@@ -6,14 +6,16 @@ from typing import List
 import requests
 import uvicorn
 from bs4 import BeautifulSoup
+from environs import env
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from utils import get_env, now, unwrap
 
-BUS_STOP_REF = get_env("BUS_STOP_REF")
-TRAIN_QUERY = get_env("TRAIN_QUERY")
-TRAIN_API_KEY = get_env("TRAIN_API_KEY")
-CACHE_TTL_SECONDS = int(get_env("CACHE_TTL_SECONDS", "30"))
+from .utils import now, unwrap
+
+BUS_STOP_REF = env.str("BUS_STOP_REF")
+TRAIN_QUERY = env.str("TRAIN_QUERY")
+TRAIN_API_KEY = env.str("TRAIN_API_KEY")
+CACHE_TTL_SECONDS = env.int("CACHE_TTL_SECONDS", 30)
 
 TRAIN_SERVICE_TYPES = {
     "bus": "BUS",
