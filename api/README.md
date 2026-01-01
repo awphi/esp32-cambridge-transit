@@ -1,6 +1,6 @@
 # esp32-cambridge-transit-api
 
-FastAPI-based aggregation API for Cambridge transit ESP32 project
+FastAPI-based aggregation API for Cambridge transit ESP32 project. This is an extremely simple webserver - not built for high throughput. Transit information is requested on-demand from the upstream APIs and held in memory for a configurable time to minimize outbound requests
 
 ## Quick start
 

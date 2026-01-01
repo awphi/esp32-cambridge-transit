@@ -46,42 +46,37 @@ class AllTransitInfo(BaseModel):
     )
 
 
-last_all_transit_info = AllTransitInfo()
-cache_lock = asyncio.Lock()
-
-
 def fetch_bus_info() -> TransitInfo:
     url = f"https://www.cambridgeshirebus.info/Popup_Content/WebDisplay/WebDisplay.aspx?stopRef={BUS_STOP_REF}"
-    r = requests.get(url)
+    r = requests.get(url, timeout=(3, 10))
     result = TransitInfo(title="Buses", departures=[])
 
-    if r.ok:
-        try:
-            soup = BeautifulSoup(r.text, features="html.parser")
-            # unsafe unwrapping of Optional values but fine for now
-            table = unwrap(soup.select_one(".rtiTable"))
+    if not r.ok:
+        logging.error(f"Failed to GET bus info: {r.status_code}")
+        return result
 
-            station_name = (
-                unwrap(soup.select_one("#stopTitle"))
-                .get_text()
-                .split("-")[0]
-                .strip()
+    try:
+        soup = BeautifulSoup(r.text, features="html.parser")
+        # unsafe unwrapping of Optional values but fine for now
+        table = unwrap(soup.select_one(".rtiTable"))
+
+        station_name = (
+            unwrap(soup.select_one("#stopTitle"))
+            .get_text()
+            .split("-")[0]
+            .strip()
+        )
+        result.title = f"Buses - {station_name}"
+
+        for row in table.select(".gridRow"):
+            service = unwrap(row.select_one(".gridServiceItem")).get_text()
+            dest = unwrap(row.select_one(".gridDestinationItem")).get_text()
+            eta = unwrap(row.select_one(".gridTimeItem")).get_text()
+            result.departures.append(
+                TransitRow(eta=eta, service=service, dest=dest)
             )
-            result.title = f"Buses - {station_name}"
-
-            for row in table.select(".gridRow"):
-                service = unwrap(row.select_one(".gridServiceItem")).get_text()
-                dest = unwrap(
-                    row.select_one(".gridDestinationItem")
-                ).get_text()
-                eta = unwrap(row.select_one(".gridTimeItem")).get_text()
-                result.departures.append(
-                    TransitRow(eta=eta, service=service, dest=dest)
-                )
-        except Exception as e:
-            logging.error(f"Error parsing bus info: {e}")
-    else:
-        logging.error(f"Failed to fetch bus info: {r.status_code} {r.text}")
+    except Exception as e:
+        logging.error(f"Error parsing bus info: {e}")
 
     return result
 
@@ -91,62 +86,64 @@ def fetch_train_info() -> TransitInfo:
     r = requests.get(
         url,
         headers={"x-apikey": TRAIN_API_KEY, "User-Agent": ""},
+        timeout=(3, 10),
     )
     result = TransitInfo(title="Trains", departures=[])
-    if r.ok:
-        data = r.json()
-        departures = [
-            *data.get("trainServices", []),
-            *data.get("busServices", []),
-        ]
-        departures.sort(
-            key=lambda s: datetime.time.fromisoformat(s.get("std"))
+    if not r.ok:
+        logging.error(f"Failed to fetch train info: {r.status_code}")
+        return result
+
+    data = r.json()
+    departures = [
+        *data.get("trainServices", []),
+        *data.get("busServices", []),
+    ]
+    departures.sort(key=lambda s: datetime.time.fromisoformat(s.get("std")))
+
+    station_name = data.get("locationName", "Unknown Station")
+    result.title = f"Trains - {station_name}"
+
+    for service in departures:
+        std = service.get("std")
+        etd = service.get("etd", "On time")
+        eta = f"{std} ({etd})" if etd != "On time" else std
+        dest = service.get("destination", [{}])[-1].get(
+            "locationName", "Unknown"
         )
-
-        station_name = data.get("locationName", "Unknown Station")
-        result.title = f"Trains - {station_name}"
-
-        for service in departures:
-            std = service.get("std")
-            etd = service.get("etd", "On time")
-            eta = f"{std} ({etd})" if etd != "On time" else std
-            dest = service.get("destination", [{}])[-1].get(
-                "locationName", "Unknown"
-            )
-            service_name = TRAIN_SERVICE_TYPES.get(
-                service.get("serviceType", "unknown"),
-                TRAIN_SERVICE_TYPES["unknown"],
-            )
-            result.departures.append(
-                TransitRow(eta=eta, service=service_name, dest=dest)
-            )
-    else:
-        logging.error(f"Failed to fetch train info: {r.status_code} {r.text}")
+        service_name = TRAIN_SERVICE_TYPES.get(
+            service.get("serviceType", "unknown"),
+            TRAIN_SERVICE_TYPES["unknown"],
+        )
+        result.departures.append(
+            TransitRow(eta=eta, service=service_name, dest=dest)
+        )
 
     return result
 
 
 def is_cache_fresh() -> bool:
-    return (now() - last_all_transit_info.time) < CACHE_TTL_SECONDS
+    return (now() - cache.time) < CACHE_TTL_SECONDS
 
 
 app = FastAPI()
+cache = AllTransitInfo()
+cache_lock = asyncio.Lock()
 
 
 @app.get("/")
 async def get_root() -> AllTransitInfo:
-    global last_all_transit_info
+    global cache, cache_lock
 
-    if is_cache_fresh():
-        return last_all_transit_info
+    if (now() - cache.time) < CACHE_TTL_SECONDS:
+        return cache
 
     async with cache_lock:
         if is_cache_fresh():
-            return last_all_transit_info
-        last_all_transit_info = AllTransitInfo(
+            return cache
+        cache = AllTransitInfo(
             bus_info=fetch_bus_info(), train_info=fetch_train_info()
         )
-        return last_all_transit_info
+        return cache
 
 
 if __name__ == "__main__":
