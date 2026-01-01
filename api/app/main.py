@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import logging
-from contextlib import asynccontextmanager
 from typing import List
 
 import requests
@@ -14,6 +13,7 @@ from utils import get_env, now, unwrap
 BUS_STOP_REF = get_env("BUS_STOP_REF")
 TRAIN_QUERY = get_env("TRAIN_QUERY")
 TRAIN_API_KEY = get_env("TRAIN_API_KEY")
+CACHE_TTL_SECONDS = int(get_env("CACHE_TTL_SECONDS", "30"))
 
 TRAIN_SERVICE_TYPES = {
     "bus": "BUS",
@@ -45,6 +45,7 @@ class AllTransitInfo(BaseModel):
 
 
 last_all_transit_info = AllTransitInfo()
+cache_lock = asyncio.Lock()
 
 
 def fetch_bus_info() -> TransitInfo:
@@ -123,29 +124,27 @@ def fetch_train_info() -> TransitInfo:
     return result
 
 
-async def update_transit_info() -> None:
-    global last_all_transit_info
-
-    while True:
-        last_all_transit_info = AllTransitInfo(
-            bus_info=fetch_bus_info(), train_info=fetch_train_info()
-        )
-        await asyncio.sleep(60)
+def is_cache_fresh() -> bool:
+    return (now() - last_all_transit_info.time) < CACHE_TTL_SECONDS
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    task = asyncio.create_task(update_transit_info())
-    yield
-    task.cancel()
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 
 @app.get("/")
 async def get_root() -> AllTransitInfo:
-    return last_all_transit_info
+    global last_all_transit_info
+
+    if is_cache_fresh():
+        return last_all_transit_info
+
+    async with cache_lock:
+        if is_cache_fresh():
+            return last_all_transit_info
+        last_all_transit_info = AllTransitInfo(
+            bus_info=fetch_bus_info(), train_info=fetch_train_info()
+        )
+        return last_all_transit_info
 
 
 if __name__ == "__main__":
